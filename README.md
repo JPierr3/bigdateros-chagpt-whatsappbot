@@ -10,3 +10,4 @@ pueden ver el video paso a paso en el siguiente enlace: [https://youtu.be/puYWiZ
 git clone https://github.com/JPierr3/bigdateros-chagpt-whatsappbot.git
 ```
     
+Modifica el archivo sett.py con los token de meta y openAI
