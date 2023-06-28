@@ -2,6 +2,11 @@ import requests
 import sett
 import json
 import time
+import openai
+import csv
+import os
+from datetime import datetime
+
 
 def obtener_Mensaje_whatsapp(message):
     if 'type' not in message :
@@ -288,3 +293,126 @@ def administrar_chatbot(text,number, messageId, name):
 
     for item in list:
         enviar_Mensaje_whatsapp(item)
+
+#chatgpt
+openai.api_key = sett.openai_api_key
+def generar_respuesta_chatgpt(user_message, number, espedido=False):
+    print('generar_respuesta_chatgpt espedido true')
+    messages = [{'role':'system', 'content':"""
+                Eres BotPedido, un servicio automatizado para recoger pedidos para un restaurante de comida peruana. \
+                Primero empieza la conversación saludando al cliente, luego recoges el pedido, \
+                y luego preguntas si es para recoger o para entregar. \
+                Esperas a recoger todo el pedido, luego lo resúmenes y verificas por última \
+                vez si el cliente quiere agregar algo más. \
+                Si es una entrega, pides una dirección. \
+                Finalmente recoges el pago.\
+                Asegúrate de aclarar todas las opciones, entradas, bebidas y tamaños para identificar \
+                de forma única el artículo del menú.\
+                Respondes de manera corta, precisa, muy conversacional y amigable. \
+                El menú incluye \
+                Ceviche  10 35 soles \
+                Lomo saltado 12 28 soles \
+                Arroz con pollo  11 26 soles \
+                Entradas: \
+                Tamales  10 soles \
+                Anticuchos  22 soles \
+                Papa rellena  15 soles \
+                Bebidas: \
+                Chicha Morada  6 soles \
+                Inca Kola  5 soles \
+                Agua embotellada  4 soles. \
+                """}]
+    historial = get_chat_from_csv(number)
+    messages.extend(historial)
+    print('message:' ,messages )
+    
+    messages.append({'role': 'user', 'content': user_message})
+    print('generar_respuesta_chatgpt')
+    if espedido:
+      print('generar_respuesta_chatgpt espedido true')
+      messages.append(
+                        {'role':'system', 'content':'Crea un resumen del pedido anterior en formato JSON. \
+                        Primero analiza el menu del restaurante ingresado al inicio \
+                        contexto inicial y compara con el pedido del usuario y solo cuando hayas analizado  \
+                        el pedido completo del usuario,  categorizalo en lista plato principal, lista de entradas, lista de bebidas.  \
+                        luego actualizar el precio total del pedido una vez hayas listado cada item. \
+                        Los campos del json deben ser  \
+                        1) lista plato principal  con atributos de nombre , tamaño , cantidad precio, \
+                        2) lista de entradas con atributos de nombre, cantidad y precio, \
+                        3) lista de bebidas con atributos de nombre, cantidad y precio,  \
+                        4) precio total.'},
+                    )
+      
+    response = openai.ChatCompletion.create(
+          model="gpt-3.5-turbo",
+          messages=messages,
+          temperature=0
+      ) 
+    print(response) 
+    return response.choices[0].message["content"]
+  
+  
+def generar_respuesta_chatgpt2(prompt,number, espedido=False):
+    return 'respuesta del asistente'
+
+  
+
+def guardar_conversacion(conversation_id, number, name, user_msg,timestamp, bot_msg=''):
+    try:
+      conversations = []
+      conversation = [conversation_id, number, name, user_msg, bot_msg,datetime.fromtimestamp(timestamp)]
+      print('inicio')
+      # Guardar las conversaciones en el archivo CSV
+      with open('conversaciones.csv', 'a', newline='') as csv_file:
+        print('guardar conversacion')
+        data = csv.writer(csv_file, delimiter=',')
+        data.writerow(conversation)
+      
+      messages =  get_chat_from_csv(number)
+      print ('mensajes del usuario: ', messages)
+    except Exception as e:
+        print(e)
+        return e,403
+
+def get_chat_from_csv(number):
+    messages = []
+    print('get_chat_from_csv')
+    with open('conversaciones.csv') as file:
+        reader = csv.DictReader(file)
+        print('conversaciones.csv')
+        for row in reader:
+            if row['number'] == number:
+                print('number')
+                user_msg = {'role': 'user', 'content': row['user_msg']}
+                bot_msg = {'role': 'assistant', 'content': row['bot_msg']}
+                messages.append(user_msg)
+                messages.append(bot_msg)
+    return messages
+  
+def guardar_pedido(jsonPedido, number):
+    # Eliminar el texto que sigue al JSON
+    print('guardar perdido')
+    start_index = jsonPedido.find("{")
+    end_index = jsonPedido.rfind("}")
+
+    # Extrae la cadena JSON de la respuesta
+    json_str = jsonPedido[start_index:end_index+1]
+
+    # Convierte la cadena JSON en un objeto de Python
+    pedido = json.loads(json_str)
+
+    # Ahora puedes usar 'pedido' como un objeto de Python
+    print('pedido', pedido)
+    with open('pedidos.csv', 'a', newline='') as file:
+        writer = csv.writer(file, delimiter=',')
+        print('pedidos.csv')
+        platos_principales = [f"{plato['cantidad']}  {plato['nombre']} - {plato['precio']} soles" for plato in pedido['plato_principal']]
+        entradas = [f"{entrada['cantidad']} {entrada['nombre']} - {entrada['precio']} soles" for entrada in pedido['entradas']]
+        bebidas = [f"{bebida['cantidad']} {bebida['nombre']} - {bebida['precio']} soles" for bebida in pedido['bebidas']]
+        
+        writer.writerow([number, 
+                         ', '.join(platos_principales), 
+                         ', '.join(entradas), 
+                         ', '.join(bebidas), 
+                         pedido['precio_total'], 
+                         datetime.now().strftime("%Y-%m-%d %H:%M:%S")])

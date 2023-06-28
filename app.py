@@ -25,17 +25,38 @@ def verificar_token():
 def recibir_mensajes():
     try:
         body = request.get_json()
+        print(body)
         entry = body['entry'][0]
         changes = entry['changes'][0]
         value = changes['value']
         message = value['messages'][0]
         number = message['from']
         messageId = message['id']
+        timestamp = int(message['timestamp'])
         contacts = value['contacts'][0]
         name = contacts['profile']['name']
         text = services.obtener_Mensaje_whatsapp(message)
+        print('mensaje usuario: ',text)
+        #services.administrar_chatbot(text, number,messageId,name)
+        
+        if 'es todo' in text:
+          print('es todo')
+          services.guardar_conversacion(messageId, number, name, text, timestamp, 'pedido realizado')
+          jsonPedido = services.generar_respuesta_chatgpt(text, number, True)
+          print('1jsonPedido',jsonPedido)
+          services.guardar_pedido(jsonPedido, number)
+          data = services.text_Message(number,'Pedido Confirmado, gracias!')
+        else:
+          print('recolecta pedido')
+          respuestabot = services.generar_respuesta_chatgpt(text, number, False)
+          print('recolecta pedido 2')
+          services.guardar_conversacion(messageId, number, name, text, timestamp, respuestabot)
+          print('recolecta pedido 3')
+          data = services.text_Message(number,respuestabot)
 
-        services.administrar_chatbot(text, number,messageId,name)
+        
+        print('data', data)
+        services.enviar_Mensaje_whatsapp(data)
         return 'enviado'
 
     except Exception as e:
