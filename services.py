@@ -295,7 +295,7 @@ def administrar_chatbot(text,number, messageId, name):
         enviar_Mensaje_whatsapp(item)
 
 #chatgpt
-openai.api_key = sett.openai_api_key
+openai.api_key = sett.openai_api
 def generar_respuesta_chatgpt(user_message, number, espedido=False):
     print('generar_respuesta_chatgpt espedido true')
     messages = [{'role':'system', 'content':"""
